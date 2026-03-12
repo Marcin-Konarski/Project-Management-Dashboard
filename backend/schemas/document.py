@@ -8,27 +8,29 @@ from ..custom_types import Name
 
 class DocumentBase(BaseModel):
     name: Name
-    storage_key: Annotated[
-        str, Field(min_length=1)
-    ]  # TODO: Adjust this value to actual AWS key
-    size: Annotated[int, Field(gt=0)]
 
     model_config = {"from_attributes": True}
 
 
-class DocumentRequest(BaseModel):
-    name: Name | None = None
-    size: Annotated[int, Field(gt=0)] | None = None
-    storage_key: Annotated[str, Field(min_length=1)] | None = None
-    content_type: Annotated[str, Field(min_length=1)] | None = None
-
-
 class DocumentResponse(DocumentBase):
     id: UUID
-    content_type: str | None = None
+    status: str
     created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+class DocumentResponseWithURLs(DocumentResponse):
+    presigned_url: dict
+
+
+class DocumentUploadResponse(BaseModel):
+    documents: list[DocumentResponseWithURLs]
 
 
 class DocumentListResponse(BaseModel):
     documents: list[DocumentResponse]
     count: int
+
+
+class PresignedUrlResponse(BaseModel):
+    url: str

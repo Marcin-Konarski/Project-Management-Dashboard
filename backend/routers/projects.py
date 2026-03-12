@@ -15,17 +15,25 @@ from ..schemas.project import (
 )
 from ..schemas.document import (
     DocumentBase,
-    DocumentRequest,
     DocumentResponse,
+    DocumentResponseWithURLs,
+    DocumentUploadResponse,
     DocumentListResponse,
+    PresignedUrlResponse
 )
 from ..schemas.user import MemberResponse
-from ..models import Project, ProjectUser, Document, Role, User
+from ..models import Project, ProjectUser, Document, Role, User, DocumentStatus
 from ..core.security import get_user_and_session
 from ..dependencies import (
     get_project_for_user_permissions,
     get_project_for_owner_permissions,
     get_document_for_user_permissions,
+)
+from ..core.config import config
+from ..aws_utility.s3_buckets import (
+    create_presigned_url_post_operation,
+    create_presigned_url_get_operation,
+    create_presigned_url_put_operation,
 )
 
 
@@ -269,7 +277,7 @@ def get_project_documents(
 # Upload document(s) for a specific project
 @router.post(
     "/projects/{project_id}/documents",
-    response_model=DocumentListResponse,
+    response_model=DocumentUploadResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def upload_documents(
@@ -283,9 +291,8 @@ def upload_documents(
     documents_db = [
         Document(
             name=doc.name,
-            size=doc.size,
-            storage_key=doc.storage_key,
             project_id=project.id,
+            status=DocumentStatus.PENDING
         )
         for doc in documents
     ]
@@ -294,11 +301,23 @@ def upload_documents(
     commit_or_409(
         session, "Document with that name already exists.", extract_details=True
     )
-    session.refresh(project)
 
-    return DocumentListResponse(
-        documents=project.documents, count=len(project.documents)
-    )
+    response_documents = []
+    for doc_db in documents_db:
+        session.refresh(doc_db)
+        object_key = f"{project.id}/{doc_db.id}"
+        url = create_presigned_url_post_operation(bucket_name=config.s3_bucket_name, object_name=object_key)
+        response_documents.append(
+            DocumentResponseWithURLs(
+                id=doc_db.id,
+                name=doc_db.name,
+                status=doc_db.status,
+                created_at=doc_db.created_at,
+                presigned_url=url,
+            )
+        )
+
+    return DocumentUploadResponse(documents=response_documents)
 
 
 # Get/download a specific document
@@ -317,6 +336,28 @@ def get_document(
     return document
 
 
+# Get/download a specific document content
+@router.get(
+    "/projects/{project_id}/documents/{document_id}/content",
+    response_model=PresignedUrlResponse,
+    status_code=status.HTTP_200_OK,
+)
+def get_document_content(
+    document_and_session: tuple[Document, SessionDep] = Depends(
+        get_document_for_user_permissions
+    ),
+):
+    document, session = document_and_session
+
+    object_key = f"{document.project_id}/{document.id}"
+    url = create_presigned_url_get_operation(
+        bucket_name=config.s3_bucket_name,
+        object_name=object_key,
+    )
+
+    return PresignedUrlResponse(url=url)
+
+
 # Update document metadata (partial update)
 @router.patch(
     "/projects/{project_id}/documents/{document_id}",
@@ -324,7 +365,7 @@ def get_document(
     status_code=status.HTTP_200_OK,
 )
 def update_document(
-    document_update: Annotated[DocumentRequest, Body()],
+    document_update: Annotated[DocumentBase, Body()],
     document_and_session: tuple[Document, SessionDep] = Depends(
         get_document_for_user_permissions
     ),
@@ -342,6 +383,27 @@ def update_document(
 
     return document_db
 
+
+# Generate presigned URL to replace document content
+@router.put(
+    "/projects/{project_id}/documents/{document_id}/content",
+    response_model=PresignedUrlResponse,
+    status_code=status.HTTP_200_OK,
+)
+def update_document_content(
+    document_and_session: tuple[Document, SessionDep] = Depends(
+        get_document_for_user_permissions
+    ),
+):
+    document, session = document_and_session
+
+    object_key = f"{document.project_id}/{document.id}"
+    url = create_presigned_url_put_operation(
+        bucket_name=config.s3_bucket_name,
+        object_name=object_key,
+    )
+
+    return PresignedUrlResponse(url=url)
 
 # Delete a document
 @router.delete(
