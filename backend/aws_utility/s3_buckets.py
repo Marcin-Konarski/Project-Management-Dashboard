@@ -2,10 +2,6 @@ from .boto_client import s3_client
 from ..core.config import config
 
 
-def create_bucket(bucket_name: str):
-    s3_client.create_bucket(Bucket=bucket_name)
-
-
 def create_presigned_url_post_operation(
     bucket_name: str, object_name: str, expiration: int = 600
 ) -> dict:
