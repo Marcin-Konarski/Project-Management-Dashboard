@@ -5,9 +5,13 @@ from pydantic_settings import BaseSettings
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY")
+LAMBDA_API_KEY = os.getenv("LAMBDA_API_KEY")
 
 if not SECRET_KEY:
     raise RuntimeError("SECRET_KEY environment variable is not set")
+
+if not LAMBDA_API_KEY:
+    raise RuntimeError("LAMBDA_API_KEY environment variable is not set")
 
 
 class Config(BaseSettings):

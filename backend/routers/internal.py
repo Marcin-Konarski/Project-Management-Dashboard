@@ -1,9 +1,10 @@
 from typing import Annotated
-from fastapi import APIRouter, Body, status, HTTPException
+from fastapi import APIRouter, Body, status, HTTPException, Depends
 
 from ..db.session import SessionDep
 from ..models import Document, DocumentStatus
 from ..schemas.document import DocumentUploadConfirmRequest, DocumentResponse
+from ..dependencies import validate_lambda_api_key
 from datetime import datetime, timezone
 
 
@@ -14,6 +15,7 @@ router = APIRouter(prefix="/internal", tags=["internal"])
     "/documents/upload-confirm",
     response_model=DocumentResponse,
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(validate_lambda_api_key)],
 )
 def confirm_document_upload(
     payload: Annotated[DocumentUploadConfirmRequest, Body()],

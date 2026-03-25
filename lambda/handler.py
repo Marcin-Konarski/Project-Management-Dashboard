@@ -6,7 +6,21 @@ import urllib.error
 import boto3
 
 s3_client = boto3.client("s3")
+secrets_client = boto3.client("secretsmanager")
+
 API_BASE_URL = os.environ["API_BASE_URL"]
+API_KEY_SECRET_ARN = os.environ["API_KEY_SECRET_ARN"]
+
+# Fetch API key once at Lambda initialization (cached across invocations)
+_api_key_cache = None
+
+
+def get_api_key():
+    global _api_key_cache
+    if _api_key_cache is None:
+        response = secrets_client.get_secret_value(SecretId=API_KEY_SECRET_ARN)
+        _api_key_cache = response["SecretString"]
+    return _api_key_cache
 
 
 def lambda_handler(event, context):
@@ -40,7 +54,10 @@ def lambda_handler(event, context):
         req = urllib.request.Request(
             url,
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "X-API-Key": get_api_key(),
+            },
             method="POST",
         )
 

@@ -1,11 +1,21 @@
 from typing import Annotated, Tuple
 from uuid import UUID
 from sqlmodel import select
-from fastapi import Depends, Path, status, HTTPException
+from fastapi import Depends, Path, status, HTTPException, Header
 
 from .db.session import SessionDep
 from .core.security import get_user_and_session
+from .core.config import LAMBDA_API_KEY
 from .models import Project, ProjectUser, Document, Role, User
+
+
+def validate_lambda_api_key(x_api_key: Annotated[str, Header()]) -> None:
+    """Validate the Lambda API key from the X-API-Key header."""
+    if x_api_key != LAMBDA_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key",
+        )
 
 
 def _get_project_user_for_project(

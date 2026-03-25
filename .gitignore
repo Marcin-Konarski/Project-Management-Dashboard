@@ -266,3 +266,5 @@ terraform.rc
 # planout
 
 .claude
+
+documentation/

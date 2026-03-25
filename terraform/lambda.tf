@@ -1,5 +1,20 @@
 # --- Lambda function ---
 
+# API key for Lambda to authenticate with backend
+resource "random_password" "lambda_api_key" {
+  length  = 64
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "lambda_api_key" {
+  name = "${var.project_name}-lambda-api-key"
+}
+
+resource "aws_secretsmanager_secret_version" "lambda_api_key" {
+  secret_id     = aws_secretsmanager_secret.lambda_api_key.id
+  secret_string = random_password.lambda_api_key.result
+}
+
 resource "aws_iam_role" "lambda" {
   name = "${var.project_name}-lambda"
 
@@ -39,6 +54,26 @@ resource "aws_iam_role_policy_attachment" "lambda_s3" {
   policy_arn = aws_iam_policy.lambda_s3_read.arn
 }
 
+resource "aws_iam_policy" "lambda_secrets_read" {
+  name = "${var.project_name}-lambda-secrets-read"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "secretsmanager:GetSecretValue",
+      ]
+      Resource = aws_secretsmanager_secret.lambda_api_key.arn
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_secrets" {
+  role       = aws_iam_role.lambda.name
+  policy_arn = aws_iam_policy.lambda_secrets_read.arn
+}
+
 # Package the Lambda code
 data "archive_file" "lambda" {
   type        = "zip"
@@ -57,7 +92,8 @@ resource "aws_lambda_function" "upload_confirm" {
 
   environment {
     variables = {
-      API_BASE_URL = "http://${aws_lb.main.dns_name}"
+      API_BASE_URL       = "http://${aws_lb.main.dns_name}"
+      API_KEY_SECRET_ARN = aws_secretsmanager_secret.lambda_api_key.arn
     }
   }
 
