@@ -54,3 +54,11 @@ def login_invalid_username_payload():
         "username": "unknownuser",
         "password": "aaaaaaaa",
     }
+
+
+@pytest.fixture
+def login_invalid_username_payload():
+    return {
+        "username": "unknownuser",
+        "password": "aaaaaaaa",
+    }

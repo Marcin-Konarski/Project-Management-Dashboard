@@ -10,16 +10,9 @@ import os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from backend.dependencies import get_session
-from backend.core.security import get_user_and_session
+from backend.db.session import get_session
+from backend.core.security import get_user_and_session, create_access_token
 from backend.models.user import User
-
-
-# @pytest.fixture
-# def app():
-#     application = FastAPI()
-#     application.include_router(router)
-#     return application
 
 
 @pytest.fixture
@@ -29,12 +22,43 @@ def mock_session(mocker: MockerFixture) -> MagicMock:
     return session
 
 
-# @pytest.fixture
-# def app_with_session(app, mock_session):
-#     def override_session(): # This simulates DI
-#         yield mock_session
-#     app.dependency_overrides[get_session] = override_session # Instead of a real DB session endpoints get mock_session
-#     return app
+@pytest.fixture
+def make_client(mock_session: MagicMock):
+    """Factory fixture that creates a TestClient with mocked dependencies"""
+    def _make_client(router: APIRouter) -> TestClient:
+        app = FastAPI()
+        app.include_router(router)
+        
+        # Override the session dependency with mock_session
+        def override_get_session():
+            yield mock_session
+        
+        app.dependency_overrides[get_session] = override_get_session
+        return TestClient(app)
+    
+    return _make_client
+
+
+@pytest.fixture
+def make_authenticated_client(mock_session: MagicMock, fake_user: MagicMock):
+    """Factory fixture that creates a TestClient with mocked dependencies and pre-authenticated user"""
+    def _make_authenticated_client(router: APIRouter) -> TestClient:
+        app = FastAPI()
+        app.include_router(router)
+        
+        # Override the session dependency with mock_session
+        def override_get_session():
+            yield mock_session
+        
+        # Override the get_user_and_session dependency to return fake_user
+        def override_get_user_and_session():
+            return (fake_user, mock_session)
+        
+        app.dependency_overrides[get_session] = override_get_session
+        app.dependency_overrides[get_user_and_session] = override_get_user_and_session
+        return TestClient(app)
+    
+    return _make_authenticated_client
 
 
 @pytest.fixture
@@ -44,10 +68,6 @@ def fake_user() -> MagicMock:
     user.id = uuid4()
     user.username = "testuser"
     return user
-
-
-# @pytest.fixture
-# def client(app_with_session) -> TestClient:
 #     return TestClient(app_with_session)
 
 
